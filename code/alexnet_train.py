@@ -20,21 +20,23 @@ def run_training(tf_records, batch_size, num_epoch):
         acc = tf.reduce_mean(tf.cast(tf.nn.in_top_k(logits, labels, 1), tf.float32))
 
         # training operation 
-        init_ops = tf.group(tf.global_variables_initializer(), tf.local_variables_initializer())
+        
         global_step = tf.Variable(0, name='global_step', trainable=False)
         lr = tf.train.exponential_decay(0.001, global_step=global_step, decay_steps=3000, decay_rate=0.9, 
         staircase=True)
 
         optimizer = tf.train.AdamOptimizer(lr)
-
-
+        
+        
+        train_ops = optimizer.minimize(total_loss, global_step)
+        init_ops = tf.group(tf.global_variables_initializer(), tf.local_variables_initializer())
         # summary
         tf.summary.scalar("Accuracy", acc)
         tf.summary.scalar("learning rate", lr)
 
         # summary writer
         merged = tf.summary.merge_all()
-        train_writer = tf.summary.FileWriter('./log_dir', merged)
+        
         
         # checkpoint writer
         new_saver = tf.train.Saver(max_to_keep=100)
@@ -42,15 +44,28 @@ def run_training(tf_records, batch_size, num_epoch):
 
         with tf.Session() as sess:
             sess.run(init_ops)
-
+            train_writer = tf.summary.FileWriter('./log_dir', sess.graph)
             if ckpt and ckpt.model_checkpoint_state('./models'):
                 new_saver.restore(sess, ckpt.model_checkpoint_path)
                 print('restore and continue training!')
-                
 
-            my_total_loss, my_cross_entorpy = sess.run([total_loss, cross_entropy_mean],feed_dict={train_mode:True})
-            print(my_cross_entorpy)
-            print(sess.run(acc, feed_dict={train_mode:True}))
+            
+            try:
+                while True:    
+                    step = sess.run(global_step)
+                    _, summary = sess.run([train_ops, merged], feed_dict={train_mode:True})
+                    # _ = sess.run([train_ops], feed_dict={train_mode:True})
+                    train_writer.add_summary(summary, step)
+                    print(step)
+                    
+                    if step %1000 == 0:
+                        save_path = new_saver.save(sess, os.path.join('./models', 'model.ckpt'), global_step=global_step)
+                        print("Model saved in file {}".format(save_path))
+            except tf.errors.OutOfRangeError:
+                print('Done training for {} epoches, {} steps'.format(epoches, step))
+            finally:
+                save_path = new_saver.save(sess, os.path.join('./models', 'model.ckpt'), global_step=global_step)
+                print("Model saved in file {}".format(save_path))
 
     
     
@@ -59,7 +74,7 @@ def run_training(tf_records, batch_size, num_epoch):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--tfrecord_path', type=str, default="../data/tfrecords/*.tfrecords")
-    parser.add_argument('--batch_size', type=int, default=16)
+    parser.add_argument('--batch_size', type=int, default=8)
     parser.add_argument('--num_epoch', type=int, default=40)
     parser.add_argument('--cuda', action='store_true', default=False)
 
