@@ -14,7 +14,7 @@ def run_training(tf_records, batch_size, num_epoch):
         cross_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=labels, logits=logits)
         cross_entropy_mean = tf.reduce_mean(cross_entropy)
 
-        total_loss = cross_entropy_mean + tf.reduce_sum(tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES))
+        total_loss = cross_entropy_mean + 0.01*tf.reduce_sum(tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES))
         
         # prediction accuracy
         acc = tf.reduce_mean(tf.cast(tf.nn.in_top_k(logits, labels, 1), tf.float32))
@@ -33,6 +33,8 @@ def run_training(tf_records, batch_size, num_epoch):
         # summary
         tf.summary.scalar("Accuracy", acc)
         tf.summary.scalar("learning rate", lr)
+        tf.summary.scalar('total loss', total_loss)
+        tf.summary.scalar('cross_entropy', cross_entropy_mean)
 
         # summary writer
         merged = tf.summary.merge_all()
@@ -45,7 +47,7 @@ def run_training(tf_records, batch_size, num_epoch):
         with tf.Session() as sess:
             sess.run(init_ops)
             train_writer = tf.summary.FileWriter('./log_dir', sess.graph)
-            if ckpt and ckpt.model_checkpoint_state('./models'):
+            if ckpt and ckpt.model_checkpoint_path:
                 new_saver.restore(sess, ckpt.model_checkpoint_path)
                 print('restore and continue training!')
 
@@ -74,8 +76,8 @@ def run_training(tf_records, batch_size, num_epoch):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--tfrecord_path', type=str, default="../data/tfrecords/*.tfrecords")
-    parser.add_argument('--batch_size', type=int, default=8)
-    parser.add_argument('--num_epoch', type=int, default=40)
+    parser.add_argument('--batch_size', type=int, default=32)
+    parser.add_argument('--num_epoch', type=int, default=100)
     parser.add_argument('--cuda', action='store_true', default=False)
 
     
